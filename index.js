@@ -19,6 +19,7 @@ app.use(
 
 function verifyGhostSignature(req, res, next) {
   const signatureHeader = req.get("X-Ghost-Signature");
+  console.log(signatureHeader);
   if (!signatureHeader) {
     return res.status(401).send("Missing signature");
   }
