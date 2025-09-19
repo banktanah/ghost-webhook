@@ -13,7 +13,7 @@ app.use(
   })
 );
 
-const GHOST_WEBHOOK_SECRET = process.env.GHOST_WEBHOOK_SECRET || "supersecret";
+const GHOST_WEBHOOK_SECRET = process.env.GHOST_WEBHOOK_SECRET || "mysecret123";
 
 function verifyGhostSignature(req, res, next) {
   const signatureHeader = req.get("X-Ghost-Signature");
