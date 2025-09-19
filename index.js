@@ -3,41 +3,38 @@ import crypto from "crypto";
 
 const app = express();
 
-// simpan raw body buat verifikasi
+// simpan raw body
 app.use(express.json({
   verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
+    req.rawBody = buf; // Buffer, bukan JSON
   }
 }));
 
-const GHOST_WEBHOOK_SECRET = process.env.GHOST_SECRET || "mysecret123";
-
 function verifyGhostSignature(req, res, next) {
-  const signature = req.get("X-Ghost-Signature");
-  if (!signature) return res.status(401).send("Missing signature");
+  const signatureHeader = req.get("X-Ghost-Signature");
+  if (!signatureHeader) {
+    return res.status(401).send("Missing signature");
+  }
 
-  // hapus prefix sha256= kalau ada
-  const sig = signature.replace(/^sha256=/, "");
+  // signature Ghost bentuknya: sha256=<hash>, t=<timestamp>
+  const [hashPart] = signatureHeader.split(",");
+  const received = hashPart.split("=")[1];
 
   const expected = crypto
-    .createHmac("sha256", GHOST_WEBHOOK_SECRET)
-    .update(req.rawBody, "utf8")
+    .createHmac("sha256", process.env.GHOST_WEBHOOK_SECRET)
+    .update(req.rawBody) // pakai raw body, bukan JSON.stringify
     .digest("hex");
 
   console.log("Expected:", expected);
-  console.log("Received:", sig);
+  console.log("Received:", received);
 
-  if (expected !== sig) {
+  if (expected !== received) {
     return res.status(401).send("Invalid signature");
   }
   next();
 }
 
 app.post("/ghost-webhook", verifyGhostSignature, (req, res) => {
-  console.log("Webhook verified ✅", req.body);
-  res.status(200).send("OK");
-});
-
-app.listen(3000, "0.0.0.0", () => {
-  console.log("Webhook listener running on port 3000");
+  console.log("Webhook verified & received:", req.body);
+  res.sendStatus(200);
 });
