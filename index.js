@@ -1,19 +1,21 @@
-const crypto = require("crypto");
 const express = require("express");
 const bodyParser = require("body-parser");
+const crypto = require("crypto");
 
 const app = express();
+const PORT = 3000;
 
-// simpan raw body untuk verifikasi signature
+// pakai secret yang sama persis dengan yang diisi di Ghost Webhook UI
+const GHOST_WEBHOOK_SECRET = process.env.GHOST_WEBHOOK_SECRET || "mysecret123";
+
+// simpan raw body sebelum diparse
 app.use(
   bodyParser.json({
     verify: (req, res, buf) => {
-      req.rawBody = buf.toString("utf8");
+      req.rawBody = buf; // simpan raw buffer, bukan hasil parse
     },
   })
 );
-
-const GHOST_WEBHOOK_SECRET = process.env.GHOST_WEBHOOK_SECRET || "mysecret123";
 
 function verifyGhostSignature(req, res, next) {
   const signatureHeader = req.get("X-Ghost-Signature");
@@ -21,10 +23,10 @@ function verifyGhostSignature(req, res, next) {
     return res.status(401).send("Missing signature");
   }
 
-  // contoh header: "sha256=abcdef..., t=123456789"
-  const sigParts = signatureHeader.split(",");
+  // Format: sha256=<hash>, t=<timestamp>
+  const parts = signatureHeader.split(",");
   const sigObj = {};
-  for (const part of sigParts) {
+  for (const part of parts) {
     const [k, v] = part.split("=");
     sigObj[k.trim()] = v.trim();
   }
@@ -34,7 +36,7 @@ function verifyGhostSignature(req, res, next) {
     return res.status(401).send("Invalid signature format");
   }
 
-  // hitung ulang HMAC dari raw body
+  // Hitung ulang HMAC pakai raw body
   const expectedHash = crypto
     .createHmac("sha256", GHOST_WEBHOOK_SECRET)
     .update(req.rawBody, "utf8")
@@ -43,7 +45,6 @@ function verifyGhostSignature(req, res, next) {
   console.log("Expected:", expectedHash);
   console.log("Received:", receivedHash);
 
-  // gunakan timingSafeEqual untuk mencegah timing attack
   const expectedBuffer = Buffer.from(expectedHash, "hex");
   const receivedBuffer = Buffer.from(receivedHash, "hex");
 
@@ -57,12 +58,12 @@ function verifyGhostSignature(req, res, next) {
   next();
 }
 
-// contoh endpoint webhook
+// Endpoint webhook
 app.post("/ghost-webhook", verifyGhostSignature, (req, res) => {
-  console.log("Webhook received:", req.body);
+  console.log("✅ Webhook received:", req.body);
   res.sendStatus(200);
 });
 
-app.listen(3000, () => {
-  console.log("Webhook server running on port 3000");
+app.listen(PORT, () => {
+  console.log(`🚀 Webhook server running at http://0.0.0.0:${PORT}`);
 });
