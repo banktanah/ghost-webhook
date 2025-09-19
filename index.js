@@ -1,43 +1,68 @@
-import express from "express";
-import crypto from "crypto";
+const crypto = require("crypto");
+const express = require("express");
+const bodyParser = require("body-parser");
 
 const app = express();
 
-// simpan raw body buat verifikasi
-app.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
-}));
+// simpan raw body untuk verifikasi signature
+app.use(
+  bodyParser.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  })
+);
 
-const GHOST_WEBHOOK_SECRET = process.env.GHOST_SECRET || "mysecret123";
+const GHOST_WEBHOOK_SECRET = process.env.GHOST_WEBHOOK_SECRET || "supersecret";
 
 function verifyGhostSignature(req, res, next) {
-  const signature = req.get("X-Ghost-Signature");
-  if (!signature) return res.status(401).send("Missing signature");
+  const signatureHeader = req.get("X-Ghost-Signature");
+  if (!signatureHeader) {
+    return res.status(401).send("Missing signature");
+  }
 
-  // hapus prefix sha256= kalau ada
-  const sig = signature.replace(/^sha256=/, "");
+  // contoh header: "sha256=abcdef..., t=123456789"
+  const sigParts = signatureHeader.split(",");
+  const sigObj = {};
+  for (const part of sigParts) {
+    const [k, v] = part.split("=");
+    sigObj[k.trim()] = v.trim();
+  }
 
-  const expected = crypto
+  const receivedHash = sigObj["sha256"];
+  if (!receivedHash) {
+    return res.status(401).send("Invalid signature format");
+  }
+
+  // hitung ulang HMAC dari raw body
+  const expectedHash = crypto
     .createHmac("sha256", GHOST_WEBHOOK_SECRET)
     .update(req.rawBody, "utf8")
     .digest("hex");
 
-  console.log("Expected:", expected);
-  console.log("Received:", sig);
+  console.log("Expected:", expectedHash);
+  console.log("Received:", receivedHash);
 
-  if (expected !== sig) {
+  // gunakan timingSafeEqual untuk mencegah timing attack
+  const expectedBuffer = Buffer.from(expectedHash, "hex");
+  const receivedBuffer = Buffer.from(receivedHash, "hex");
+
+  if (
+    expectedBuffer.length !== receivedBuffer.length ||
+    !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+  ) {
     return res.status(401).send("Invalid signature");
   }
+
   next();
 }
 
+// contoh endpoint webhook
 app.post("/ghost-webhook", verifyGhostSignature, (req, res) => {
-  console.log("Webhook verified ✅", req.body);
-  res.status(200).send("OK");
+  console.log("Webhook received:", req.body);
+  res.sendStatus(200);
 });
 
-app.listen(3000, "0.0.0.0", () => {
-  console.log("Webhook listener running on port 3000");
+app.listen(3000, () => {
+  console.log("Webhook server running on port 3000");
 });
