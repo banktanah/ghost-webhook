@@ -19,12 +19,11 @@ app.use(
 
 function verifyGhostSignature(req, res, next) {
   const signatureHeader = req.get("X-Ghost-Signature");
-  console.log(signatureHeader);
   if (!signatureHeader) {
     return res.status(401).send("Missing signature");
   }
 
-  // Format: sha256=<hash>, t=<timestamp>
+  // Parse header: sha256=<hash>, t=<timestamp>
   const parts = signatureHeader.split(",");
   const sigObj = {};
   for (const part of parts) {
@@ -33,18 +32,20 @@ function verifyGhostSignature(req, res, next) {
   }
 
   const receivedHash = sigObj["sha256"];
-  if (!receivedHash) {
+  const ts = sigObj["t"];
+  if (!receivedHash || !ts) {
     return res.status(401).send("Invalid signature format");
   }
 
-  // Hitung ulang HMAC pakai raw body
+  // Catatan: harus pakai raw body + timestamp
   const expectedHash = crypto
     .createHmac("sha256", GHOST_WEBHOOK_SECRET)
-    .update(req.rawBody, "utf8")
+    .update(req.rawBody.toString("utf8") + ts)   // 🔑 tambahkan ts
     .digest("hex");
 
   console.log("Expected:", expectedHash);
   console.log("Received:", receivedHash);
+  console.log("Timestamp:", ts);
 
   const expectedBuffer = Buffer.from(expectedHash, "hex");
   const receivedBuffer = Buffer.from(receivedHash, "hex");
