@@ -6,7 +6,7 @@ const app = express();
 const PORT = 3000;
 
 // pakai secret yang sama persis dengan yang diisi di Ghost Webhook UI
-const GHOST_WEBHOOK_SECRET = process.env.GHOST_WEBHOOK_SECRET || "mysecret123";
+const GHOST_WEBHOOK_SECRET = process.env.GHOST_WEBHOOK_SECRET || "webhook123ghost!@#Banktanah";
 
 // simpan raw body sebelum diparse
 app.use(
@@ -43,9 +43,6 @@ function verifyGhostSignature(req, res, next) {
     .update(req.rawBody.toString("utf8") + ts)   // 🔑 tambahkan ts
     .digest("hex");
 
-  console.log("Expected:", expectedHash);
-  console.log("Received:", receivedHash);
-  console.log("Timestamp:", ts);
 
   const expectedBuffer = Buffer.from(expectedHash, "hex");
   const receivedBuffer = Buffer.from(receivedHash, "hex");
@@ -60,7 +57,6 @@ function verifyGhostSignature(req, res, next) {
   next();
 }
 
-// Endpoint webhook
 app.post("/ghost-webhook", verifyGhostSignature, (req, res) => {
   console.log("✅ Webhook received:", req.body);
   res.sendStatus(200);
